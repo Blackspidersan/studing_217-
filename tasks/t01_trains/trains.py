@@ -129,3 +129,91 @@ def parse_schedule(lines) -> list[dict]:
             raise ValueError(
                 f"Строка {line_num} ({name}): стоянка превышает 2 часа ({duration} мин)"
             )
+        trains.append(
+            {
+                "index": len(trains),
+                "name": name,
+                "arr": arr_min,
+                "dep": actual_dep_min,
+                "arr_fmt": arr_fmt,
+                "dep_fmt": dep_fmt,
+            }
+        )
+
+    return trains
+
+
+def assign_platforms(
+    trains: list[dict],
+) -> list[list[str]]:  # list[dict] - список словарей
+    # Распределяет поезда по платформам
+    if not trains:
+        return []
+
+    def get_sort_key(t):
+        return (t["arr"], t["index"])
+
+    trains.sort(key=get_sort_key)
+
+    busy_platforms = []
+    free_platforms = []
+    platforms_schedule: list[list[str]] = []
+
+    for train in trains:
+        arr = train["arr"]
+        dep = train["dep"]
+
+        while busy_platforms and busy_platforms[0][0] <= arr:
+            _, freed_id = heap_pop(busy_platforms)
+            heap_push(free_platforms, freed_id)
+
+        if free_platforms:
+            platform_id = heap_pop(free_platforms)
+        else:
+            platform_id = len(platforms_schedule)
+            platforms_schedule.append([])
+
+        heap_push(busy_platforms, (dep, platform_id))
+
+        record = f"{train['name']} ({train['arr_fmt']}\u2013{train['dep_fmt']})"
+        platforms_schedule[platform_id].append(record)
+
+    return platforms_schedule
+
+
+def main():
+    try:
+        if len(sys.argv) > 2:
+            raise ValueError(
+                "Слишком много аргументов. Использование: python trains.py [schedule.txt]"
+            )
+
+        if len(sys.argv) == 2:
+            with open(sys.argv[1], "r", encoding="utf-8") as file:
+                trains = parse_schedule(file)
+        else:
+            sys.stdin.reconfigure(encoding="utf-8")
+            trains = parse_schedule(sys.stdin)
+
+        schedule = assign_platforms(trains)
+        count = len(schedule)
+
+        print(f"Минимальное количество платформ: {count}")
+        if count > 0:
+            print("\nРаспределение по платформам:")
+            for idx, records in enumerate(schedule, start=1):
+                print(f"  Платформа {idx}: {', '.join(records)}")
+
+    except FileNotFoundError:
+        print(f"Ошибка: файл '{sys.argv[1]}' не найден.", file=sys.stderr)
+        sys.exit(1)
+    except UnicodeDecodeError:
+        print("Ошибка: файл должен быть в кодировке UTF-8.", file=sys.stderr)
+        sys.exit(1)
+    except ValueError as err:
+        print(f"Ошибка входных данных: {err}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
